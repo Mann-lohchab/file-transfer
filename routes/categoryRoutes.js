@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import Category from "../models/Category.js";
 import File from "../models/File.js";
 import { protect } from "../middleware/authMiddleware.js";
@@ -7,32 +8,68 @@ const router = express.Router();
 
 // Get all categories (admin only)
 router.get("/", protect, async (req, res) => {
-  try {
-    const categories = await Category.find({}).sort({ createdAt: 1 });
-    res.json(categories);
-  } catch (error) {
-    res.status(500).json({ message: error.message || 'Error fetching categories' });
-  }
+   try {
+     console.log("=== ADMIN CATEGORIES ROUTE DEBUG ===");
+     console.log("Fetching categories (admin) - DB state:", mongoose.connection.readyState === 1 ? 'connected' : 'disconnected');
+
+     // Check database connection
+     if (mongoose.connection.readyState !== 1) {
+       console.error("Database not connected in admin categories route");
+       return res.status(503).json({
+         message: 'Database not connected',
+         error: true,
+         categories: []
+       });
+     }
+
+     const categories = await Category.find({}).sort({ createdAt: 1 });
+     console.log("Categories fetched successfully:", categories.length, "categories");
+     res.json(categories);
+   } catch (error) {
+     console.error("Error in admin categories route:", error);
+     res.status(500).json({
+       message: error.message || 'Error fetching categories',
+       error: true,
+       categories: []
+     });
+   }
 });
 
 // Get all categories (public)
 router.get("/public", async (req, res) => {
-  try {
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+   try {
+     console.log("=== PUBLIC CATEGORIES ROUTE DEBUG ===");
+     console.log("Fetching categories (public) - DB state:", mongoose.connection.readyState === 1 ? 'connected' : 'disconnected');
 
-    console.log("=== CATEGORIES API DEBUG ===");
-    console.log("Categories data:", {
-      categoriesType: typeof categories,
-      categoriesIsArray: Array.isArray(categories),
-      categoriesLength: categories?.length || 0,
-      firstCategoryType: categories?.[0] ? typeof categories[0] : 'no categories'
-    });
+     // Check database connection
+     if (mongoose.connection.readyState !== 1) {
+       console.error("Database not connected in public categories route");
+       return res.status(503).json({
+         message: 'Database not connected',
+         error: true,
+         categories: []
+       });
+     }
 
-    res.json(categories);
-  } catch (error) {
-    console.error("Categories API error:", error);
-    res.status(500).json({ message: error.message || 'Error fetching categories' });
-  }
+     const categories = await Category.find({}).sort({ createdAt: 1 });
+
+     console.log("=== CATEGORIES API DEBUG ===");
+     console.log("Categories data:", {
+       categoriesType: typeof categories,
+       categoriesIsArray: Array.isArray(categories),
+       categoriesLength: categories?.length || 0,
+       firstCategoryType: categories?.[0] ? typeof categories[0] : 'no categories'
+     });
+
+     res.json(categories);
+   } catch (error) {
+     console.error("Categories API error:", error);
+     res.status(500).json({
+       message: error.message || 'Error fetching categories',
+       error: true,
+       categories: []
+     });
+   }
 });
 
 // Create new category

@@ -152,6 +152,7 @@ typings/
 .yarn-integrity
 
 # dotenv environment variables file
+# IMPORTANT: Never commit .env files - they contain sensitive information
 .env
 .env.local
 .env.development.local

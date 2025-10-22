@@ -19,6 +19,9 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// Database connection status tracking
+let isDBConnected = false;
+
 const app = express();
 
 // Global request logging - place right after app creation
@@ -486,6 +489,22 @@ app.get("/admin", requireAuth, async (req, res) => {
       return res.redirect("/login");
     }
 
+    // Check database connection status
+    console.log("Database connection status:", isDBConnected ? 'CONNECTED' : 'DISCONNECTED');
+    if (!isDBConnected) {
+      console.warn("Database not connected, rendering admin page with empty data");
+      return res.render("layout", {
+        title: "Admin Panel - File Server",
+        body: await renderEjsContent("pages/admin", {
+          categories: [],
+          files: [],
+          links: [],
+          user: req.user,
+          error: 'Database connection unavailable. Please check your database configuration.',
+        }),
+      });
+    }
+
     // Fetch data for admin panel
     console.log("Fetching admin data from APIs...");
     const [categoriesResponse, filesResponse, linksResponse] = await Promise.all([
@@ -507,38 +526,144 @@ app.get("/admin", requireAuth, async (req, res) => {
     ]);
 
     console.log("Admin API responses:", {
-      categoriesStatus: categoriesResponse.status,
-      filesStatus: filesResponse.status,
-      linksStatus: linksResponse.status
+       categoriesStatus: categoriesResponse.status,
+       filesStatus: filesResponse.status,
+       linksStatus: linksResponse.status
+     });
+
+    // Validate response status codes
+    const responses = [categoriesResponse, filesResponse, linksResponse];
+    const responseNames = ['categories', 'files', 'links'];
+    let hasApiErrors = false;
+
+    responses.forEach((response, index) => {
+      if (response.status >= 400) {
+        console.error(`${responseNames[index]} API returned error status: ${response.status}`);
+        hasApiErrors = true;
+      }
     });
 
-    const categories = await categoriesResponse.json();
-    const files = await filesResponse.json();
-    const linksData = await linksResponse.json();
+    // Safe JSON parsing with validation
+    let categories, files, linksData;
 
-    // Use only active links
-    const links = linksData.links || [];
+    try {
+      categories = await categoriesResponse.json();
+      console.log("Categories response parsed:", {
+        type: typeof categories,
+        isArray: Array.isArray(categories),
+        length: categories?.length || 0,
+        isError: categories?.error || categories?.message
+      });
 
-    console.log("Admin data loaded:", {
-      categoriesType: typeof categories,
-      categoriesLength: categories?.length || 0,
-      filesType: typeof files,
-      filesLength: files?.length || 0
+      // Validate categories is an array, fallback to empty array if not
+      if (!Array.isArray(categories)) {
+        console.error("Categories is not an array, received:", categories);
+        categories = [];
+      }
+    } catch (parseError) {
+      console.error("Failed to parse categories response:", parseError);
+      categories = [];
+    }
+
+    try {
+      files = await filesResponse.json();
+      console.log("Files response parsed:", {
+        type: typeof files,
+        isArray: Array.isArray(files),
+        length: files?.length || 0,
+        isError: files?.error || files?.message
+      });
+
+      // Validate files is an array, fallback to empty array if not
+      if (!Array.isArray(files)) {
+        console.error("Files is not an array, received:", files);
+        files = [];
+      }
+    } catch (parseError) {
+      console.error("Failed to parse files response:", parseError);
+      files = [];
+    }
+
+    try {
+      linksData = await linksResponse.json();
+      console.log("Links response parsed:", {
+        type: typeof linksData,
+        hasLinks: !!linksData?.links,
+        linksIsArray: Array.isArray(linksData?.links),
+        linksLength: linksData?.links?.length || 0,
+        isError: linksData?.error || linksData?.message
+      });
+
+      // Use only active links
+      const links = linksData?.links || [];
+
+      // Validate links is an array, fallback to empty array if not
+      if (!Array.isArray(links)) {
+        console.error("Links is not an array, received:", links);
+        links = [];
+      }
+    } catch (parseError) {
+      console.error("Failed to parse links response:", parseError);
+      linksData = { links: [] };
+    }
+
+    console.log("Admin data loaded after validation:", {
+       categoriesType: typeof categories,
+       categoriesLength: categories?.length || 0,
+       filesType: typeof files,
+       filesLength: files?.length || 0,
+       linksLength: linksData?.links?.length || 0
+     });
+
+    // Create safe data structure with fallbacks
+    const safeData = {
+      categories: Array.isArray(categories) ? categories : [],
+      files: Array.isArray(files) ? files : [],
+      links: Array.isArray(linksData?.links) ? linksData.links : [],
+      user: req.user,
+      error: hasApiErrors ? 'Some data could not be loaded. Please check your database connection.' : null
+    };
+
+    console.log("Safe data structure created:", {
+      categoriesLength: safeData.categories.length,
+      filesLength: safeData.files.length,
+      linksLength: safeData.links.length,
+      hasError: !!safeData.error
     });
 
     res.render("layout", {
-      title: "Admin Panel - File Server",
-      body: await renderEjsContent("pages/admin", {
-        categories: categories,
-        files: files,
-        links: links,
-        user: req.user,
-      }),
-    });
+       title: "Admin Panel - File Server",
+       body: await renderEjsContent("pages/admin", safeData),
+     });
   } catch (error) {
     console.error("Error rendering admin page:", error);
     console.error("Error stack:", error.stack);
-    res.redirect("/login");
+
+    // Check if error is authentication-related
+    const isAuthError = error.message && (
+      error.message.includes('token') ||
+      error.message.includes('unauthorized') ||
+      error.message.includes('jwt') ||
+      error.message.includes('auth')
+    );
+
+    if (isAuthError) {
+      console.log("Authentication error detected, redirecting to login");
+      return res.redirect("/login");
+    }
+
+    // For other errors, render admin page with empty data and error message
+    console.log("Non-authentication error, rendering admin page with error message");
+    res.render("layout", {
+      title: "Admin Panel - File Server",
+      body: await renderEjsContent("pages/admin", {
+        categories: [],
+        files: [],
+        links: [],
+        user: req.user,
+        error: 'Failed to load admin data. Please check database connection and try again.',
+      }),
+    });
   }
 });
 
@@ -646,22 +771,41 @@ app.use((err, req, res, next) => {
 const connectDB = async (retries = 3) => {
   for (let i = 0; i < retries; i++) {
     try {
-      await mongoose.connect(process.env.MONGO_URL);
-      console.log("MongoDB Connected");
-      return;
-    } catch (err) {
-      console.error(`MongoDB connection attempt ${i + 1} failed:`, err.message);
-      if (i < retries - 1) {
-        console.log(`Retrying in ${i + 1} seconds...`);
-        await new Promise((resolve) => setTimeout(resolve, (i + 1) * 1000));
-      }
-    }
-  }
-  console.error("Failed to connect to MongoDB after multiple attempts");
-  process.exit(1);
+       await mongoose.connect(process.env.MONGO_URL);
+       console.log("MongoDB Connected");
+       isDBConnected = true;
+       return;
+     } catch (err) {
+       console.error(`MongoDB connection attempt ${i + 1} failed:`, err.message);
+       isDBConnected = false;
+       if (i < retries - 1) {
+         console.log(`Retrying in ${i + 1} seconds...`);
+         await new Promise((resolve) => setTimeout(resolve, (i + 1) * 1000));
+       }
+     }
+   }
+   console.error("Failed to connect to MongoDB after multiple attempts");
+   isDBConnected = false;
+   process.exit(1);
 };
 
 connectDB();
+
+// Mongoose connection event listeners
+mongoose.connection.on('connected', () => {
+  console.log('Mongoose connected to MongoDB');
+  isDBConnected = true;
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('Mongoose disconnected from MongoDB');
+  isDBConnected = false;
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('Mongoose connection error:', err.message);
+  isDBConnected = false;
+});
 
 // Schedule periodic cleanup of orphaned files (every 24 hours)
 setInterval(

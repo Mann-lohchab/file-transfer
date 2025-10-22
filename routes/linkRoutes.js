@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Link from '../models/Link.js';
 import Category from '../models/Category.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -7,15 +8,28 @@ const router = express.Router();
 
 // GET /api/links - Get all links with optional filtering (public for download page)
 router.get('/', async (req, res) => {
-  try {
-    const {
-      categoryId,
-      platform,
-      search,
-      isActive = true,
-      page = 1,
-      limit = 50
-    } = req.query;
+   try {
+     console.log("=== LINKS ROUTE DEBUG ===");
+     console.log("Fetching links (isActive:", req.query.isActive, ") - DB state:", mongoose.connection.readyState === 1 ? 'connected' : 'disconnected');
+
+     // Check database connection
+     if (mongoose.connection.readyState !== 1) {
+       console.error("Database not connected in links route");
+       return res.status(503).json({
+         message: 'Database not connected',
+         error: true,
+         links: []
+       });
+     }
+
+     const {
+       categoryId,
+       platform,
+       search,
+       isActive = true,
+       page = 1,
+       limit = 50
+     } = req.query;
 
     // Build filter object
     const filter = { isActive };
@@ -60,18 +74,37 @@ router.get('/', async (req, res) => {
     console.log("=== LINKS API DEBUG ===");
     console.log("Filter:", filter);
     console.log("Response data:", {
-      linksType: typeof responseData.links,
-      linksIsArray: Array.isArray(responseData.links),
-      linksLength: responseData.links?.length || 0,
-      paginationType: typeof responseData.pagination,
-      totalLinks: responseData.pagination?.totalLinks || 0
-    });
+       linksType: typeof responseData.links,
+       linksIsArray: Array.isArray(responseData.links),
+       linksLength: responseData.links?.length || 0,
+       paginationType: typeof responseData.pagination,
+       totalLinks: responseData.pagination?.totalLinks || 0
+     });
+
+    // Validate response structure
+    if (!responseData || typeof responseData !== 'object') {
+      console.error("Invalid response data structure:", typeof responseData);
+      return res.status(500).json({
+        message: 'Invalid response format',
+        error: true,
+        links: []
+      });
+    }
+
+    if (!Array.isArray(responseData.links)) {
+      console.error("Links is not an array:", typeof responseData.links);
+      responseData.links = [];
+    }
 
     res.json(responseData);
-  } catch (error) {
-    console.error('Error fetching links:', error);
-    res.status(500).json({ msg: 'Server error' });
-  }
+   } catch (error) {
+     console.error('Error fetching links:', error);
+     res.status(500).json({
+       message: error.message || 'Error fetching links',
+       error: true,
+       links: []
+     });
+   }
 });
 
 // GET /api/links/:id - Get single link by ID (public for download page)

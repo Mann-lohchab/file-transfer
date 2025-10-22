@@ -160,8 +160,21 @@ const handleMulterError = (error, req, res, next) => {
 
 // Get all files (public download page) - Only returns actual file uploads, not links
 router.get("/", async (req, res) => {
-  try {
-    // Get only actual files from database (exclude URL-type entries)
+   try {
+     console.log("=== FILES ROUTE DEBUG ===");
+     console.log("Fetching files - DB state:", mongoose.connection.readyState === 1 ? 'connected' : 'disconnected');
+
+     // Check database connection
+     if (mongoose.connection.readyState !== 1) {
+       console.error("Database not connected in files route");
+       return res.status(503).json({
+         message: 'Database not connected',
+         error: true,
+         files: []
+       });
+     }
+
+     // Get only actual files from database (exclude URL-type entries)
     const files = await File.find({ type: { $ne: 'url' } })
       .populate('categoryId', 'name description')
       .select('filename originalName path uploadedAt size type description categoryId downloadCount')
@@ -243,17 +256,31 @@ router.get("/", async (req, res) => {
     console.log("=== FILES API DEBUG ===");
     console.log(`Returning ${filesWithDisplaySize.length} valid files (only actual file uploads)`);
     console.log("Files data:", {
-      filesType: typeof filesWithDisplaySize,
-      filesIsArray: Array.isArray(filesWithDisplaySize),
-      filesLength: filesWithDisplaySize?.length || 0,
-      firstFileType: filesWithDisplaySize?.[0] ? typeof filesWithDisplaySize[0] : 'no files'
-    });
+       filesType: typeof filesWithDisplaySize,
+       filesIsArray: Array.isArray(filesWithDisplaySize),
+       filesLength: filesWithDisplaySize?.length || 0,
+       firstFileType: filesWithDisplaySize?.[0] ? typeof filesWithDisplaySize[0] : 'no files'
+     });
+
+    // Validate response is an array before sending
+    if (!Array.isArray(filesWithDisplaySize)) {
+      console.error("Files response is not an array:", typeof filesWithDisplaySize);
+      return res.status(500).json({
+        message: 'Invalid response format',
+        error: true,
+        files: []
+      });
+    }
 
     res.json(filesWithDisplaySize);
-  } catch (error) {
-    console.error('Error fetching files:', error);
-    res.status(500).json({ message: 'Error fetching files' });
-  }
+   } catch (error) {
+     console.error('Error fetching files:', error);
+     res.status(500).json({
+       message: error.message || 'Error fetching files',
+       error: true,
+       files: []
+     });
+   }
 });
 
 // Direct file download endpoint
