@@ -8,7 +8,21 @@ import Category from "../models/Category.js";
 import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware.js";
 import { formatBytes } from "../utils/format.js";
+import { v2 as cloudinary } from 'cloudinary';
 
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error('CLOUDINARY CONFIGURATION ERROR: Missing required environment variables');
+  console.error('Required: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET');
+}
+
+// Legacy function - only cleans local files, not Cloudinary
 // Utility function to clean up orphaned files in uploads directory
 const cleanupOrphanedFiles = async () => {
   try {
@@ -63,29 +77,11 @@ const cleanupOrphanedFiles = async () => {
 // Export the cleanup function for use in server.js
 export { cleanupOrphanedFiles };
 
-// Define uploads directory path
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
-
-// Ensure uploads directory exists
-try {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  console.log('Uploads directory ready:', UPLOADS_DIR);
-} catch (error) {
-  console.error('Failed to create uploads directory:', error);
-  // Continue anyway - multer will fail with a clear error if directory is not writable
-}
 
 const router = express.Router();
 
 // Setup multer for file uploads
-const storage = multer.diskStorage({
-  destination: UPLOADS_DIR,
-  filename: (req, file, cb) => {
-    // Sanitize filename
-    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    cb(null, `${Date.now()}-${sanitizedName}`);
-  }
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   console.log('File upload attempt:', {
@@ -109,6 +105,43 @@ const upload = multer({
     fieldSize: 2 * 1024 * 1024, // 2MB field size limit
   }
 });
+
+// Helper function to upload file to Cloudinary
+const uploadToCloudinary = async (fileBuffer, originalName, mimeType) => {
+  // Determine resource type based on MIME type
+  let resourceType = 'auto';
+  if (mimeType.startsWith('image/')) {
+    resourceType = 'image';
+  } else if (mimeType.startsWith('video/')) {
+    resourceType = 'video';
+  } else {
+    resourceType = 'raw';
+  }
+
+  // Upload options
+  const options = {
+    folder: process.env.CLOUDINARY_FOLDER || 'file-server-uploads',
+    resource_type: resourceType,
+    public_id: `${Date.now()}-${originalName.replace(/[^a-zA-Z0-9.-]/g, '_')}`,
+    use_filename: true,
+    unique_filename: true,
+    overwrite: false
+  };
+
+  // Upload using stream
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) {
+        console.error('Cloudinary upload error:', error);
+        reject(new Error(`Cloudinary upload failed: ${error.message}`));
+      } else {
+        resolve(result);
+      }
+    });
+
+    uploadStream.end(fileBuffer);
+  });
+};
 
 // Multer error handling middleware
 const handleMulterError = (error, req, res, next) => {
@@ -177,7 +210,7 @@ router.get("/", async (req, res) => {
      // Get only actual files from database (exclude URL-type entries)
     const files = await File.find({ type: { $ne: 'url' } })
       .populate('categoryId', 'name description')
-      .select('filename originalName path uploadedAt size type description categoryId downloadCount')
+      .select('filename originalName path uploadedAt size type description categoryId downloadCount url cloudinaryUrl cloudinaryPublicId cloudinaryResourceType')
       .sort({ uploadedAt: -1 }); // Sort by upload date, newest first
 
     console.log(`Found ${files.length} actual file records in database`);
@@ -186,7 +219,13 @@ router.get("/", async (req, res) => {
     const validFiles = await Promise.all(
       files.map(async (file) => {
         try {
-          // For actual file uploads, validate filesystem
+          // Check if it's a Cloudinary file
+          if (file.cloudinaryUrl || file.url) {
+            console.log(`File validated via Cloudinary: ${file.filename}`);
+            return file.toObject();
+          }
+
+          // For legacy local files, validate filesystem
           if (!file.path || file.path.trim() === '') {
             console.warn(`File record missing path: ${file.filename} (${file._id})`);
             // Remove invalid file record
@@ -349,6 +388,12 @@ router.get("/download/:id", async (req, res) => {
       path: file.path
     });
 
+    // Check if file has Cloudinary URL
+    if (file.cloudinaryUrl || file.url) {
+      console.log('Redirecting to Cloudinary URL:', file.cloudinaryUrl || file.url);
+      return res.redirect(file.cloudinaryUrl || file.url);
+    }
+
     // Check if this is a URL type file (link) - should not happen via this endpoint
     if (file.type === 'url') {
       console.error('URL type file requested via download endpoint:', file._id);
@@ -395,7 +440,7 @@ router.get("/download/:id", async (req, res) => {
         } catch (deleteError) {
           console.error('Error deleting invalid file record:', deleteError);
         }
-        return res.status(404).json({ message: 'File not found on server' });
+        return res.status(404).json({ message: 'File not found in storage' });
       }
     } catch (err) {
       console.error('File access error:', err);
@@ -406,7 +451,7 @@ router.get("/download/:id", async (req, res) => {
       } catch (deleteError) {
         console.error('Error deleting orphaned file record:', deleteError);
       }
-      return res.status(404).json({ message: 'File not found on server' });
+      return res.status(404).json({ message: 'File not found in storage' });
     }
 
     // Set proper headers
@@ -674,80 +719,22 @@ router.post("/upload", upload.single('file'), handleMulterError, protect, (req, 
 
       console.log('File upload successful:', req.file.filename);
 
-      // Verify file exists and get stats
-      let stats;
-      try {
-        stats = await fsPromises.stat(req.file.path);
-        console.log('File stats retrieved:', {
-          size: stats.size,
-          path: req.file.path,
-          isFile: stats.isFile(),
-          isDirectory: stats.isDirectory(),
-          created: stats.birthtime,
-          modified: stats.mtime
-        });
-      } catch (statError) {
-        console.error('File stat error:', {
-          error: statError.message,
-          code: statError.code,
-          path: req.file.path,
-          exists: statError.code === 'ENOENT' ? 'file not found' : 'other error',
-          suggestion: statError.code === 'ENOENT' ?
-            'File was uploaded but then deleted or moved' :
-            'File system error occurred'
-        });
-
-        // Additional debugging for upload issues
-        if (statError.code === 'ENOENT') {
-          // Check if uploads directory exists and is writable
-          try {
-            await fsPromises.access(UPLOADS_DIR);
-            console.log('Uploads directory exists:', UPLOADS_DIR);
-
-            // Check if directory is writable by trying to create a test file
-            const testFile = path.join(UPLOADS_DIR, '.write-test-' + Date.now());
-            await fsPromises.writeFile(testFile, 'test');
-            await fsPromises.unlink(testFile);
-            console.log('Uploads directory is writable');
-          } catch (dirError) {
-            console.error('Uploads directory issue:', {
-              error: dirError.message,
-              directory: UPLOADS_DIR,
-              suggestion: 'Ensure uploads directory exists and is writable by the application user'
-            });
-          }
-        }
-
-        // Clean up the uploaded file if we can't access it
-        try {
-          await fsPromises.unlink(req.file.path);
-          console.log('Cleaned up inaccessible file:', req.file.path);
-        } catch (cleanupError) {
-          console.error('Failed to cleanup after stat error:', cleanupError);
-        }
-
-        return res.status(500).json({
-          message: 'File upload failed - unable to access uploaded file',
-          details: process.env.NODE_ENV === 'development' ? {
-            error: statError.message,
-            code: statError.code,
-            path: req.file.path
-          } : undefined
-        });
-      }
-
-      // Validate file size matches expected size
-      if (Math.abs(stats.size - req.file.size) > 1024) { // Allow 1KB difference for metadata
-        console.warn('File size mismatch:', { expected: req.file.size, actual: stats.size });
-      }
+      // Upload to Cloudinary
+      console.log('Uploading to Cloudinary...');
+      const cloudinaryResult = await uploadToCloudinary(req.file.buffer, req.file.originalname, req.file.mimetype);
+      console.log('Cloudinary upload successful:', cloudinaryResult.public_id);
 
       const file = new File({
-        filename: req.file.filename,
+        filename: cloudinaryResult.public_id,
         originalName: req.file.originalname,
-        path: req.file.path,
+        path: '', // No local path for Cloudinary uploads
         type: 'file',
+        url: cloudinaryResult.secure_url, // Cloudinary URL
+        cloudinaryPublicId: cloudinaryResult.public_id,
+        cloudinaryUrl: cloudinaryResult.secure_url,
+        cloudinaryResourceType: cloudinaryResult.resource_type,
         categoryId: categoryId ? new mongoose.Types.ObjectId(categoryId) : null,
-        size: stats.size,
+        size: cloudinaryResult.bytes,
         description: description ? description.trim().substring(0, 500) : '', // Limit description length
         metadata: metadata || {}
       });
@@ -766,21 +753,6 @@ router.post("/upload", upload.single('file'), handleMulterError, protect, (req, 
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
-
-    // Clean up uploaded file if database save fails
-    if (req.file) {
-      const fileFullPath = path.resolve(process.cwd(), req.file.path);
-      try {
-        await fsPromises.unlink(fileFullPath);
-        console.log('Cleaned up uploaded file after error:', req.file.filename);
-      } catch (cleanupError) {
-        console.error('Failed to cleanup file:', {
-          error: cleanupError.message,
-          filePath: fileFullPath,
-          originalFile: req.file.filename
-        });
-      }
-    }
 
     // Determine appropriate status code and message
     let statusCode = error.status || 500;
@@ -802,6 +774,9 @@ router.post("/upload", upload.single('file'), handleMulterError, protect, (req, 
     } else if (error.message?.includes('database') || error.message?.includes('mongo')) {
       statusCode = 503;
       errorMessage = 'Database error. Please try again later.';
+    } else if (error.message?.includes('Cloudinary')) {
+      statusCode = 503;
+      errorMessage = 'Cloudinary upload failed. Check credentials and quota.';
     }
 
     res.status(statusCode).json({
@@ -853,7 +828,7 @@ router.post("/cleanup-orphaned", protect, async (req, res) => {
     }
 
     res.json({
-      message: `Cleanup completed. Removed ${cleanedCount} orphaned file records.`,
+      message: `Cleanup completed. Removed ${cleanedCount} orphaned file records. Note: This only cleans local files. Cloudinary files are managed automatically.`,
       cleanedCount,
       errors: errors.length > 0 ? errors : undefined
     });
@@ -939,14 +914,25 @@ router.delete("/:id", protect, async (req, res) => {
       return res.status(404).json({ message: 'File not found' });
     }
 
-    // Delete file from filesystem
+    // Delete from Cloudinary if it has a public_id
+    if (file.cloudinaryPublicId) {
+      try {
+        await cloudinary.uploader.destroy(file.cloudinaryPublicId, { resource_type: file.cloudinaryResourceType || 'auto' });
+        console.log('Deleted from Cloudinary:', file.cloudinaryPublicId);
+      } catch (cloudinaryError) {
+        console.error('Error deleting from Cloudinary:', cloudinaryError);
+        // Continue with database deletion even if Cloudinary deletion fails
+      }
+    }
+
+    // Delete file from filesystem (for legacy files)
     try {
       const fileFullPath = path.resolve(process.cwd(), file.path);
       await fsPromises.unlink(fileFullPath);
     } catch (unlinkErr) {
       console.warn(`File not found on disk, skipping unlink: ${file.path}`, unlinkErr);
     }
-    
+
     // Delete file record from database
     await File.findByIdAndDelete(req.params.id);
     
@@ -1011,7 +997,7 @@ router.get("/category/:categoryId", protect, async (req, res) => {
 
     const files = await File.find({ categoryId: req.params.categoryId })
       .populate('categoryId', 'name description')
-      .select('filename originalName path uploadedAt size type description url categoryId downloadCount')
+      .select('filename originalName path uploadedAt size type description url categoryId downloadCount cloudinaryUrl cloudinaryPublicId cloudinaryResourceType')
       .sort({ uploadedAt: -1 });
 
     res.json(files);

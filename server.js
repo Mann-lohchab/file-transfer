@@ -791,6 +791,16 @@ const connectDB = async (retries = 3) => {
 
 connectDB();
 
+// Cloudinary configuration validation
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.warn('WARNING: Cloudinary credentials not configured');
+  console.warn('File uploads will fail. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET');
+  console.warn('Get credentials from: https://cloudinary.com/console');
+} else {
+  console.log('✓ Cloudinary configured successfully');
+  console.log(`Cloud Name: ${process.env.CLOUDINARY_CLOUD_NAME.substring(0, 5)}***`);
+}
+
 // Mongoose connection event listeners
 mongoose.connection.on('connected', () => {
   console.log('Mongoose connected to MongoDB');
@@ -855,9 +865,17 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () =>
-  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`),
-);
+const server = app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+
+  // Configuration summary
+  console.log('=== Server Configuration ===');
+  console.log(`Database: ${isDBConnected ? 'connected' : 'disconnected'}`);
+  console.log(`Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'configured' : 'not configured'}`);
+  console.log(`File Storage: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary cloud storage' : 'Local filesystem (legacy)'}`);
+  console.log(`Max File Size: ${formatBytes(parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024)}`);
+  console.log('=========================');
+});
 
 // Export for Render
 export default app;

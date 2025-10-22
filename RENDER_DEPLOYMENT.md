@@ -12,8 +12,11 @@ The following environment variables must be configured in your Render service:
 |----------|-------------|---------|
 | `MONGO_URL` | MongoDB connection string | `mongodb+srv://user:pass@cluster.mongodb.net/dbname` |
 | `JWT_SECRET` | Secret key for JWT token signing | `your-super-secret-jwt-key-minimum-32-characters-long` |
+| `CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name for file storage | `your-cloud-name` |
+| `CLOUDINARY_API_KEY` | Cloudinary API key for authentication | `your-api-key` |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret (keep this confidential!) | `your-api-secret` |
 
-**⚠️ Important**: Without these variables, the application will not work. The admin panel will show "categories.forEach is not a function" errors.
+**⚠️ Important**: Without these variables, the application will not work. The admin panel will show "categories.forEach is not a function" errors. Cloudinary credentials are required for file uploads to work on Render.
 
 ### Optional Variables
 
@@ -91,6 +94,18 @@ Replace:
 - **Cause**: `MAX_FILE_SIZE` too small or uploads directory not writable
 - **Solution**: Check `MAX_FILE_SIZE` setting and ensure uploads directory permissions
 
+**Problem**: File uploads fail with "Invalid credentials"
+- **Cause**: Cloudinary environment variables not set or incorrect
+- **Solution**: Verify all three Cloudinary env vars are set correctly in Render dashboard
+
+**Problem**: Uploads timeout or fail
+- **Cause**: Cloudinary account quota exceeded or service issues
+- **Solution**: Check Cloudinary account status and bandwidth limits in dashboard
+
+**Problem**: Files don't appear in Cloudinary
+- **Cause**: Incorrect folder name or configuration
+- **Solution**: Check Cloudinary Media Library and verify CLOUDINARY_FOLDER setting
+
 ### Viewing Logs
 
 1. Go to your Render service dashboard
@@ -103,6 +118,9 @@ Replace:
 - **"Authentication failed"**: Verify `JWT_SECRET` is set correctly
 - **"File too large"**: Increase `MAX_FILE_SIZE` or reduce file size
 - **"Connection timeout"**: Check MongoDB Atlas cluster status and network settings
+- **"Cloudinary upload failed"**: Check Cloudinary credentials and quota
+- **"Invalid credentials"**: Verify CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
+- **"File not found in storage"**: File may have been moved to cloud storage or deleted
 
 ## Production Checklist
 
@@ -113,6 +131,35 @@ Replace:
 - [ ] Test admin panel functionality
 - [ ] Check file upload/download features
 - [ ] Verify CORS settings for frontend domain
+- [ ] Set up Cloudinary account and credentials
+- [ ] Configure Cloudinary environment variables in Render
+- [ ] Test file upload to Cloudinary
+
+## Cloudinary Setup
+
+### 1. Create Cloudinary Account
+
+1. Go to https://cloudinary.com
+2. Sign up for a free account (25GB storage, 25GB bandwidth/month)
+3. Verify your email
+
+### 2. Get Credentials
+
+1. Log in to Cloudinary dashboard
+2. Navigate to Dashboard → Account Details
+3. Copy Cloud Name, API Key, and API Secret
+
+### 3. Configure Render
+
+1. In Render dashboard, go to your web service
+2. Navigate to Environment tab
+3. Add the three Cloudinary variables with your credentials
+
+### 4. Test Upload
+
+1. After deployment, log in to admin panel
+2. Try uploading a test file
+3. Verify it appears in your Cloudinary Media Library
 
 ## Security Notes
 
