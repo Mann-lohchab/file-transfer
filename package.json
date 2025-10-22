@@ -6,7 +6,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "build": "echo 'No build step required'",
+    "test": "echo 'No tests specified'",
+    "lint": "echo 'No linting configured'"
   },
   "keywords": [
     "file-sharing",

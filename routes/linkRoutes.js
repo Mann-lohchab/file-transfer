@@ -238,6 +238,26 @@ router.delete('/:id', protect, async (req, res) => {
   }
 });
 
+// DELETE /api/links/:id/permanent - Permanently delete link from database (admin only)
+router.delete('/:id/permanent', protect, async (req, res) => {
+  try {
+    const link = await Link.findById(req.params.id);
+    if (!link) {
+      return res.status(404).json({ msg: 'Link not found' });
+    }
+
+    await Link.findByIdAndDelete(req.params.id);
+
+    res.json({ msg: 'Link permanently deleted' });
+  } catch (error) {
+    console.error('Error permanently deleting link:', error);
+    if (error.kind === 'ObjectId') {
+      return res.status(400).json({ msg: 'Invalid link ID' });
+    }
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 // POST /api/links/:id/download - Increment download count (public for download page)
 router.post('/:id/download', async (req, res) => {
   try {

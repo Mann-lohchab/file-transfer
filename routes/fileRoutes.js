@@ -66,11 +66,20 @@ export { cleanupOrphanedFiles };
 // Define uploads directory path
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
+// Ensure uploads directory exists
+try {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  console.log('Uploads directory ready:', UPLOADS_DIR);
+} catch (error) {
+  console.error('Failed to create uploads directory:', error);
+  // Continue anyway - multer will fail with a clear error if directory is not writable
+}
+
 const router = express.Router();
 
 // Setup multer for file uploads
 const storage = multer.diskStorage({
-  destination: "uploads/",
+  destination: UPLOADS_DIR,
   filename: (req, file, cb) => {
     // Sanitize filename
     const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -90,6 +99,7 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
+
 const upload = multer({
   storage,
   fileFilter,
@@ -99,6 +109,54 @@ const upload = multer({
     fieldSize: 2 * 1024 * 1024, // 2MB field size limit
   }
 });
+
+// Multer error handling middleware
+const handleMulterError = (error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    console.error('Multer error:', {
+      code: error.code,
+      field: error.field,
+      message: error.message
+    });
+
+    let message = 'File upload error';
+    let statusCode = 400;
+
+    switch (error.code) {
+      case 'LIMIT_FILE_SIZE':
+        message = 'File is too large. Please choose a smaller file.';
+        statusCode = 413;
+        break;
+      case 'LIMIT_FILE_COUNT':
+        message = 'Too many files selected. Maximum 10 files allowed.';
+        statusCode = 400;
+        break;
+      case 'LIMIT_UNEXPECTED_FILE':
+        message = 'Unexpected file field. Please use the correct form field name.';
+        statusCode = 400;
+        break;
+      case 'LIMIT_FIELD_COUNT':
+        message = 'Too many form fields.';
+        statusCode = 400;
+        break;
+      default:
+        message = `Upload error: ${error.message}`;
+        break;
+    }
+
+    return res.status(statusCode).json({
+      message,
+      code: error.code,
+      ...(process.env.NODE_ENV === 'development' && {
+        originalError: error.message,
+        field: error.field
+      })
+    });
+  }
+
+  // Pass other errors to next handler
+  next(error);
+};
 
 // Get all files (public download page) - Only returns actual file uploads, not links
 router.get("/", async (req, res) => {
@@ -402,7 +460,31 @@ router.post("/debug-upload", protect, async (req, res) => {
 });
 
 // Upload new file (admin only) - Use Multer as middleware
-router.post("/upload", (req, res, next) => {
+router.post("/upload", upload.single('file'), handleMulterError, protect, (req, res, next) => {
+  console.log('=== UPLOAD ROUTE DEBUG ===');
+  console.log('Authorization header:', req.headers.authorization ? 'PRESENT' : 'MISSING');
+  console.log('User object after protect middleware:', req.user ? 'PRESENT' : 'MISSING');
+  console.log('User details:', req.user ? { id: req.user.id, username: req.user.username } : 'none');
+  console.log('Request body keys:', Object.keys(req.body || {}));
+  console.log('File present:', req.file ? 'YES' : 'NO');
+
+  // If no user object, it means protect middleware failed
+  if (!req.user) {
+    console.error('No user object found - authentication failed');
+    console.error('Headers received:', req.headers);
+    return res.status(401).json({
+      message: 'Authentication failed - no user object',
+      debug: {
+        hasAuthHeader: !!req.headers.authorization,
+        authHeader: req.headers.authorization ? req.headers.authorization.substring(0, 20) + '...' : 'none',
+        bodyKeys: Object.keys(req.body || {}),
+        hasFile: !!req.file
+      }
+    });
+  }
+
+  next();
+}, (req, res, next) => {
   // Pre-multer validation logging
   console.log('=== PRE-MULTER VALIDATION ===');
   console.log('Request validation:', {
@@ -434,7 +516,7 @@ router.post("/upload", (req, res, next) => {
   }
 
   next();
-}, protect, upload.single('file'), async (req, res) => {
+}, async (req, res) => {
   try {
     // Enhanced logging for debugging
     console.log('=== FILE UPLOAD REQUEST ===');
@@ -587,6 +669,27 @@ router.post("/upload", (req, res, next) => {
             'File was uploaded but then deleted or moved' :
             'File system error occurred'
         });
+
+        // Additional debugging for upload issues
+        if (statError.code === 'ENOENT') {
+          // Check if uploads directory exists and is writable
+          try {
+            await fsPromises.access(UPLOADS_DIR);
+            console.log('Uploads directory exists:', UPLOADS_DIR);
+
+            // Check if directory is writable by trying to create a test file
+            const testFile = path.join(UPLOADS_DIR, '.write-test-' + Date.now());
+            await fsPromises.writeFile(testFile, 'test');
+            await fsPromises.unlink(testFile);
+            console.log('Uploads directory is writable');
+          } catch (dirError) {
+            console.error('Uploads directory issue:', {
+              error: dirError.message,
+              directory: UPLOADS_DIR,
+              suggestion: 'Ensure uploads directory exists and is writable by the application user'
+            });
+          }
+        }
 
         // Clean up the uploaded file if we can't access it
         try {

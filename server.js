@@ -11,6 +11,9 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import linkRoutes from "./routes/linkRoutes.js";
 import { formatBytes } from "./utils/format.js";
 
+// Shared constants
+const DEFAULT_LINK_LIMIT = 50;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -197,7 +200,7 @@ app.get("/", async (req, res) => {
     const [filesResponse, linksResponse, categoriesResponse] =
       await Promise.all([
         fetch(`${req.protocol}://${req.get("host")}/api/files`),
-        fetch(`${req.protocol}://${req.get("host")}/api/links?isActive=true`),
+        fetch(`${req.protocol}://${req.get("host")}/api/links?isActive=true&limit=${DEFAULT_LINK_LIMIT}`),
         fetch(`${req.protocol}://${req.get("host")}/api/categories/public`),
       ]);
 
@@ -421,25 +424,25 @@ app.post("/login", express.urlencoded({ extended: true }), (req, res, next) => {
     });
 
     if (response.ok && data.token) {
-      console.log("✓ Login successful, setting cookie and redirecting");
-      // Set token in cookie for server-side use
-      res.cookie("token", data.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      });
+       console.log("✓ Login successful, setting cookie and redirecting");
+       // Set token in cookie for server-side use
+       res.cookie("token", data.token, {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === "production",
+         sameSite: "strict",
+         maxAge: 24 * 60 * 60 * 1000, // 24 hours
+       });
 
-      console.log("Cookie set successfully:", {
-        name: "token",
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000
-      });
+       console.log("Cookie set successfully:", {
+         name: "token",
+         httpOnly: true,
+         secure: process.env.NODE_ENV === "production",
+         sameSite: "strict",
+         maxAge: 24 * 60 * 60 * 1000
+       });
 
-      // Redirect to admin panel
-      res.redirect("/admin");
+       // Redirect to admin panel with token in URL for frontend to capture
+       res.redirect(`/admin?token=${data.token}`);
     } else {
       console.log("✗ Login failed:", data.message || "Invalid credentials");
       // Login failed
@@ -485,7 +488,7 @@ app.get("/admin", requireAuth, async (req, res) => {
 
     // Fetch data for admin panel
     console.log("Fetching admin data from APIs...");
-    const [categoriesResponse, filesResponse] = await Promise.all([
+    const [categoriesResponse, filesResponse, linksResponse] = await Promise.all([
       fetch(`${req.protocol}://${req.get("host")}/api/categories`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -496,15 +499,25 @@ app.get("/admin", requireAuth, async (req, res) => {
           Authorization: `Bearer ${token}`,
         },
       }),
+      fetch(`${req.protocol}://${req.get("host")}/api/links?isActive=true&limit=${DEFAULT_LINK_LIMIT}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }),
     ]);
 
     console.log("Admin API responses:", {
       categoriesStatus: categoriesResponse.status,
-      filesStatus: filesResponse.status
+      filesStatus: filesResponse.status,
+      linksStatus: linksResponse.status
     });
 
     const categories = await categoriesResponse.json();
     const files = await filesResponse.json();
+    const linksData = await linksResponse.json();
+
+    // Use only active links
+    const links = linksData.links || [];
 
     console.log("Admin data loaded:", {
       categoriesType: typeof categories,
@@ -518,6 +531,7 @@ app.get("/admin", requireAuth, async (req, res) => {
       body: await renderEjsContent("pages/admin", {
         categories: categories,
         files: files,
+        links: links,
         user: req.user,
       }),
     });
@@ -528,159 +542,10 @@ app.get("/admin", requireAuth, async (req, res) => {
   }
 });
 
-// Admin Links page route (protected)
-app.get("/admin-links", requireAuth, async (req, res) => {
-  try {
-    console.log("=== ADMIN LINKS PAGE ROUTE DEBUG ===");
-    console.log("User authenticated:", req.user?.user?.username || 'unknown');
 
-    // Get token from the same sources as requireAuth middleware
-    const authHeader = req.headers.authorization;
-    const token =
-      req.cookies?.token ||
-      (authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null) ||
-      req.query.token;
-
-    console.log("Token available for API calls:", token ? 'YES' : 'NO');
-
-    if (!token) {
-      console.error("No token available for admin links API calls");
-      return res.redirect("/login");
-    }
-
-    // Fetch data for admin links panel - both active and inactive links
-    console.log("Fetching admin links data from APIs...");
-    const [activeLinksResponse, inactiveLinksResponse, categoriesResponse] = await Promise.all([
-      fetch(`${req.protocol}://${req.get("host")}/api/links?isActive=true&limit=1000`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }),
-      fetch(`${req.protocol}://${req.get("host")}/api/links?isActive=false&limit=1000`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }),
-      fetch(`${req.protocol}://${req.get("host")}/api/categories`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }),
-    ]);
-
-    console.log("Admin Links API responses:", {
-      activeLinksStatus: activeLinksResponse.status,
-      inactiveLinksStatus: inactiveLinksResponse.status,
-      categoriesStatus: categoriesResponse.status
-    });
-
-    // Check for non-OK responses before parsing JSON
-    if (!activeLinksResponse.ok) {
-      console.error("Active links API error:", {
-        status: activeLinksResponse.status,
-        statusText: activeLinksResponse.statusText,
-        url: activeLinksResponse.url
-      });
-
-      const errorBody = await renderEjsContent("pages/admin-links", {
-        links: [],
-        categories: [],
-        user: req.user,
-        error: 'Failed to load active links data'
-      });
-
-      return res.render("layout", {
-        title: "Admin Links Management - File Server",
-        body: errorBody,
-      });
-    }
-
-    if (!inactiveLinksResponse.ok) {
-      console.error("Inactive links API error:", {
-        status: inactiveLinksResponse.status,
-        statusText: inactiveLinksResponse.statusText,
-        url: inactiveLinksResponse.url
-      });
-
-      const errorBody = await renderEjsContent("pages/admin-links", {
-        links: [],
-        categories: [],
-        user: req.user,
-        error: 'Failed to load inactive links data'
-      });
-
-      return res.render("layout", {
-        title: "Admin Links Management - File Server",
-        body: errorBody,
-      });
-    }
-
-    if (!categoriesResponse.ok) {
-      console.error("Categories API error:", {
-        status: categoriesResponse.status,
-        statusText: categoriesResponse.statusText,
-        url: categoriesResponse.url
-      });
-
-      const errorBody = await renderEjsContent("pages/admin-links", {
-        links: [],
-        categories: [],
-        user: req.user,
-        error: 'Failed to load categories data'
-      });
-
-      return res.render("layout", {
-        title: "Admin Links Management - File Server",
-        body: errorBody,
-      });
-    }
-
-    // Parse JSON only after confirming responses are OK
-    const activeLinksData = await activeLinksResponse.json();
-    const inactiveLinksData = await inactiveLinksResponse.json();
-    const categories = await categoriesResponse.json();
-
-    // Merge active and inactive links
-    const allLinks = [
-      ...(activeLinksData.links || []),
-      ...(inactiveLinksData.links || [])
-    ];
-
-    // Create combined pagination data for the merged results
-    const combinedPagination = {
-      totalLinks: allLinks.length,
-      activeLinksCount: activeLinksData.links?.length || 0,
-      inactiveLinksCount: inactiveLinksData.links?.length || 0,
-      // Use active links pagination as reference for page structure
-      currentPage: activeLinksData.pagination?.currentPage || 1,
-      totalPages: Math.ceil(allLinks.length / 50), // Assuming 50 per page default
-      hasNext: allLinks.length >= 1000, // Since we limit to 1000 total
-      hasPrev: false // Since we're showing all links
-    };
-
-    console.log("Admin links data loaded:", {
-      activeLinksLength: activeLinksData.links?.length || 0,
-      inactiveLinksLength: inactiveLinksData.links?.length || 0,
-      totalLinksLength: allLinks.length,
-      categoriesType: typeof categories,
-      categoriesLength: categories?.length || 0,
-      pagination: combinedPagination
-    });
-
-    res.render("layout", {
-      title: "Admin Links Management - File Server",
-      body: await renderEjsContent("pages/admin-links", {
-        links: allLinks,
-        categories: categories,
-        pagination: combinedPagination,
-        user: req.user,
-      }),
-    });
-  } catch (error) {
-    console.error("Error rendering admin links page:", error);
-    console.error("Error stack:", error.stack);
-    res.redirect("/login");
-  }
+// Redirect old admin-links route to unified admin panel
+app.get("/admin-links", requireAuth, (req, res) => {
+  res.redirect("/admin?tab=links");
 });
 
 // Logout route
@@ -847,7 +712,7 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () =>
-  console.log(`Server running at http://localhost:${PORT}`),
+  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`),
 );
 
 // Export for Render
