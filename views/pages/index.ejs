@@ -1,0 +1,454 @@
+<div class="min-h-screen bg-white">
+    <!-- Hero Section -->
+    <div class="max-w-6xl mx-auto px-4 py-16">
+        <div class="text-center mb-16">
+            <h1 class="text-5xl font-light text-gray-900 mb-6">
+                Available Files,
+                <span class="text-green-500 font-normal">the simple way.</span>
+            </h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+                File Server is a clean, simple file sharing platform designed to make
+                downloading files effortless and secure.
+            </p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-8">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                <button
+                    id="files-tab"
+                    class="px-6 py-2 rounded-md font-medium transition-colors <%= typeof activeTab === 'undefined' || activeTab === 'files' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900' %>"
+                >
+                    Files (<%= typeof files !== 'undefined' ? files.filter(f => f.type !== 'url').length : 0 %>)
+                </button>
+                <button
+                    id="links-tab"
+                    class="px-6 py-2 rounded-md font-medium transition-colors <%= typeof activeTab !== 'undefined' && activeTab === 'links' ? 'bg-purple-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900' %>"
+                >
+                    Links (<%= typeof links !== 'undefined' ? links.length : 0 %>)
+                </button>
+            </div>
+        </div>
+
+        <!-- Search and Filters -->
+        <div class="flex flex-col lg:flex-row gap-4 max-w-4xl mx-auto mb-12">
+            <div class="relative flex-1">
+                <input
+                    type="search"
+                    id="search-input"
+                    placeholder="Search files..."
+                    value="<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    aria-label="Search files"
+                />
+                <div class="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Display -->
+        <div class="flex justify-center space-x-6 mb-8 text-sm text-gray-600">
+            <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l4-4m-4 4l-4-4m-6 2a9 9 0 110-18 9 9 0 010 18z" />
+                </svg>
+                <%= typeof files !== 'undefined' ? files.length : 0 %> Files
+            </span>
+            <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <%= typeof links !== 'undefined' ? links.length : 0 %> Links
+            </span>
+            <span class="flex items-center">
+                Total: <%= (typeof files !== 'undefined' ? files.length : 0) + (typeof links !== 'undefined' ? links.length : 0) %> Items
+            </span>
+        </div>
+
+        <!-- Error Display -->
+        <% if (typeof error !== 'undefined' && error) { %>
+        <div class="max-w-md mx-auto mb-8 p-4 bg-red-50 border border-red-200 rounded-lg" role="alert">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span class="text-red-700"><%= error %></span>
+            </div>
+        </div>
+        <% } %>
+
+        <!-- Loading State -->
+        <% if (typeof loading !== 'undefined' && loading) { %>
+        <div class="text-center py-16" role="status" aria-live="polite">
+            <div class="inline-block w-8 h-8 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin mb-4"></div>
+            <p class="text-gray-600">Loading content...</p>
+        </div>
+        <% } else if ((typeof activeTab === 'undefined' || activeTab === 'files') && (!files || files.filter(f => f.type !== 'url').length === 0)) { %>
+        <!-- Empty Files State -->
+        <div class="text-center py-16">
+            <div class="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l4-4m-4 4l-4-4m-6 2a9 9 0 110-18 9 9 0 010 18z" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No files found</h3>
+            <p class="text-gray-600">
+                <%= typeof searchTerm !== 'undefined' && searchTerm ? 'Try adjusting your search.' : 'No files have been uploaded yet.' %>
+            </p>
+        </div>
+        <% } else if (typeof activeTab !== 'undefined' && activeTab === 'links' && (!links || links.length === 0)) { %>
+        <!-- Empty Links State -->
+        <div class="text-center py-16">
+            <div class="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No links found</h3>
+            <p class="text-gray-600">
+                <%= typeof linkSearchTerm !== 'undefined' && linkSearchTerm ? 'Try adjusting your search.' : 'No links have been uploaded yet.' %>
+            </p>
+        </div>
+        <% } else if (typeof activeTab === 'undefined' || activeTab === 'files') { %>
+        <!-- Files Table -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow-lg">
+            <table class="w-full table-auto">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700">
+                            <a href="?tab=files&sort=name&order=<%= typeof sortBy !== 'undefined' && sortBy === 'name' && typeof sortOrder !== 'undefined' && sortOrder === 'asc' ? 'desc' : 'asc' %>&search=<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>">
+                                Name
+                                <% if (typeof sortBy !== 'undefined' && sortBy === 'name') { %>
+                                    <span class="ml-1"><%= typeof sortOrder !== 'undefined' && sortOrder === 'asc' ? '↑' : '↓' %></span>
+                                <% } %>
+                            </a>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                            Description
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700">
+                            <a href="?tab=files&sort=uploadedAt&order=<%= typeof sortBy !== 'undefined' && sortBy === 'uploadedAt' && typeof sortOrder !== 'undefined' && sortOrder === 'asc' ? 'desc' : 'asc' %>&search=<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>">
+                                Date
+                                <% if (typeof sortBy !== 'undefined' && sortBy === 'uploadedAt') { %>
+                                    <span class="ml-1"><%= typeof sortOrder !== 'undefined' && sortOrder === 'asc' ? '↑' : '↓' %></span>
+                                <% } %>
+                            </a>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 hidden md:table-cell">
+                            <a href="?tab=files&sort=size&order=<%= typeof sortBy !== 'undefined' && sortBy === 'size' && typeof sortOrder !== 'undefined' && sortOrder === 'asc' ? 'desc' : 'asc' %>&search=<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>">
+                                Size
+                                <% if (typeof sortBy !== 'undefined' && sortBy === 'size') { %>
+                                    <span class="ml-1"><%= typeof sortOrder !== 'undefined' && sortOrder === 'asc' ? '↑' : '↓' %></span>
+                                <% } %>
+                            </a>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Action
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    <% if (typeof files !== 'undefined') { %>
+                        <% files.filter(file => file.type !== 'url').slice((typeof currentPage !== 'undefined' ? (currentPage - 1) * 10 : 0), (typeof currentPage !== 'undefined' ? currentPage * 10 : 10)).forEach(function(file) { %>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="text-sm font-medium text-gray-900 truncate" title="<%= file.originalName || file.filename %>">
+                                                <%= file.originalName || file.filename %>
+                                            </div>
+                                            <% if (file.originalName) { %>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                                    <%= file.originalName.split('.').pop().toUpperCase() %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 hidden md:table-cell">
+                                <div class="text-sm text-gray-500 max-w-xs truncate" title="<%= file.description || '' %>">
+                                    <%= file.description || '-' %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">
+                                    <%= new Date(file.uploadedAt).toLocaleDateString() %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                                <div class="text-sm text-gray-900">
+                                    <%= file.displaySize %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                    onclick="downloadFile('<%= file._id %>', 'file')"
+                                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                                    aria-label="Download <%= file.originalName || file.filename %>"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l4-4m-4 4l-4-4m-6 2a9 9 0 110-18 9 9 0 010 18z" />
+                                    </svg>
+                                    <span>Download</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <% }); %>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Files Pagination -->
+        <% if (typeof files !== 'undefined' && files.filter(f => f.type !== 'url').length > 10) { %>
+        <div class="flex flex-col sm:flex-row items-center justify-between mt-8 gap-4">
+            <div class="text-sm text-gray-600">
+                Showing <%= ((typeof currentPage !== 'undefined' ? currentPage : 1) - 1) * 10 + 1 %> to <%= Math.min((typeof currentPage !== 'undefined' ? currentPage : 1) * 10, files.filter(f => f.type !== 'url').length) %> of <%= files.filter(f => f.type !== 'url').length %> files
+            </div>
+            <div class="flex space-x-2">
+                <% const totalPages = Math.ceil(files.filter(f => f.type !== 'url').length / 10); %>
+                <% const currentPageNum = typeof currentPage !== 'undefined' ? parseInt(currentPage) : 1; %>
+                <% if (currentPageNum > 1) { %>
+                <a href="?tab=files&page=<%= currentPageNum - 1 %>&search=<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Previous</a>
+                <% } %>
+                <% for (let i = Math.max(1, currentPageNum - 2); i <= Math.min(totalPages, currentPageNum + 2); i++) { %>
+                <a href="?tab=files&page=<%= i %>&search=<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>" class="px-3 py-2 border rounded-lg transition-colors <%= i === currentPageNum ? 'border-green-500 bg-green-50 text-green-600' : 'border-gray-300 hover:bg-gray-50' %>"><%= i %></a>
+                <% } %>
+                <% if (currentPageNum < totalPages) { %>
+                <a href="?tab=files&page=<%= currentPageNum + 1 %>&search=<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Next</a>
+                <% } %>
+            </div>
+        </div>
+        <% } %>
+
+        <% } else if (typeof activeTab !== 'undefined' && activeTab === 'links') { %>
+        <!-- Links Table -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow-lg">
+            <table class="w-full table-auto">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700">
+                            <a href="?tab=links&sort=name&order=<%= typeof linkSortBy !== 'undefined' && linkSortBy === 'name' && typeof linkSortOrder !== 'undefined' && linkSortOrder === 'asc' ? 'desc' : 'asc' %>&search=<%= typeof linkSearchTerm !== 'undefined' ? linkSearchTerm : '' %>">
+                                Name
+                                <% if (typeof linkSortBy !== 'undefined' && linkSortBy === 'name') { %>
+                                    <span class="ml-1"><%= typeof linkSortOrder !== 'undefined' && linkSortOrder === 'asc' ? '↑' : '↓' %></span>
+                                <% } %>
+                            </a>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                            Description
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            URL
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                            Category
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700">
+                            <a href="?tab=links&sort=uploadedAt&order=<%= typeof linkSortBy !== 'undefined' && linkSortBy === 'uploadedAt' && typeof linkSortOrder !== 'undefined' && linkSortOrder === 'asc' ? 'desc' : 'asc' %>&search=<%= typeof linkSearchTerm !== 'undefined' ? linkSearchTerm : '' %>">
+                                Date
+                                <% if (typeof linkSortBy !== 'undefined' && linkSortBy === 'uploadedAt') { %>
+                                    <span class="ml-1"><%= typeof linkSortOrder !== 'undefined' && linkSortOrder === 'asc' ? '↑' : '↓' %></span>
+                                <% } %>
+                            </a>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 hidden md:table-cell">
+                            <a href="?tab=links&sort=downloadCount&order=<%= typeof linkSortBy !== 'undefined' && linkSortBy === 'downloadCount' && typeof linkSortOrder !== 'undefined' && linkSortOrder === 'asc' ? 'desc' : 'asc' %>&search=<%= typeof linkSearchTerm !== 'undefined' ? linkSearchTerm : '' %>">
+                                Downloads
+                                <% if (typeof linkSortBy !== 'undefined' && linkSortBy === 'downloadCount') { %>
+                                    <span class="ml-1"><%= typeof linkSortOrder !== 'undefined' && linkSortOrder === 'asc' ? '↑' : '↓' %></span>
+                                <% } %>
+                            </a>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Action
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    <% if (typeof links !== 'undefined') { %>
+                        <% links.slice((typeof linkCurrentPage !== 'undefined' ? (linkCurrentPage - 1) * 10 : 0), (typeof linkCurrentPage !== 'undefined' ? linkCurrentPage * 10 : 10)).forEach(function(link) { %>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-sm font-medium text-gray-900 truncate" title="<%= link.name %>">
+                                            <%= link.name %>
+                                        </div>
+                                        <% if (link.version) { %>
+                                            <span class="text-xs text-gray-500">v<%= link.version %></span>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 hidden md:table-cell">
+                                <div class="text-sm text-gray-500 max-w-xs truncate" title="<%= link.description || '' %>">
+                                    <%= link.description || '-' %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-purple-600 max-w-xs truncate" title="<%= link.downloadUrl %>">
+                                    <%= link.downloadUrl %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
+                                <div class="text-sm text-gray-900">
+                                    <%= link.categoryId?.name || 'Uncategorized' %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">
+                                    <%= new Date(link.createdAt).toLocaleDateString() %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                                <div class="text-sm text-gray-900">
+                                    <%= link.downloadCount || 0 %>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                    onclick="openLink('<%= link._id %>', '<%= link.name %>', '<%= link.downloadUrl %>')"
+                                    class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                                    aria-label="Open link <%= link.name %>"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                    <span>Open Link</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <% }); %>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Links Pagination -->
+        <% if (typeof links !== 'undefined' && links.length > 10) { %>
+        <div class="flex flex-col sm:flex-row items-center justify-between mt-8 gap-4">
+            <div class="text-sm text-gray-600">
+                Showing <%= ((typeof linkCurrentPage !== 'undefined' ? linkCurrentPage : 1) - 1) * 10 + 1 %> to <%= Math.min((typeof linkCurrentPage !== 'undefined' ? linkCurrentPage : 1) * 10, links.length) %> of <%= links.length %> links
+            </div>
+            <div class="flex space-x-2">
+                <% const linkTotalPages = Math.ceil(links.length / 10); %>
+                <% const linkCurrentPageNum = typeof linkCurrentPage !== 'undefined' ? parseInt(linkCurrentPage) : 1; %>
+                <% if (linkCurrentPageNum > 1) { %>
+                <a href="?tab=links&page=<%= linkCurrentPageNum - 1 %>&search=<%= typeof linkSearchTerm !== 'undefined' ? linkSearchTerm : '' %>" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Previous</a>
+                <% } %>
+                <% for (let i = Math.max(1, linkCurrentPageNum - 2); i <= Math.min(linkTotalPages, linkCurrentPageNum + 2); i++) { %>
+                <a href="?tab=links&page=<%= i %>&search=<%= typeof linkSearchTerm !== 'undefined' ? linkSearchTerm : '' %>" class="px-3 py-2 border rounded-lg transition-colors <%= i === linkCurrentPageNum ? 'border-purple-500 bg-purple-50 text-purple-600' : 'border-gray-300 hover:bg-gray-50' %>"><%= i %></a>
+                <% } %>
+                <% if (linkCurrentPageNum < linkTotalPages) { %>
+                <a href="?tab=links&page=<%= linkCurrentPageNum + 1 %>&search=<%= typeof linkSearchTerm !== 'undefined' ? linkSearchTerm : '' %>" class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Next</a>
+                <% } %>
+            </div>
+        </div>
+        <% } %>
+        <% } %>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-24 py-8 border-t border-gray-200">
+        <div class="max-w-4xl mx-auto px-4 text-center">
+            <p class="text-gray-500 text-sm">
+                Powered by modern file sharing technology
+            </p>
+        </div>
+    </footer>
+</div>
+
+<script>
+    // Tab switching
+    document.getElementById('files-tab').addEventListener('click', function() {
+        const url = new URL(window.location);
+        url.searchParams.set('tab', 'files');
+        url.searchParams.delete('page');
+        window.location.href = url.toString();
+    });
+
+    document.getElementById('links-tab').addEventListener('click', function() {
+        const url = new URL(window.location);
+        url.searchParams.set('tab', 'links');
+        url.searchParams.delete('page');
+        window.location.href = url.toString();
+    });
+
+    // Search functionality
+    document.getElementById('search-input').addEventListener('input', function(e) {
+        const searchTerm = e.target.value;
+        const url = new URL(window.location);
+        if (searchTerm) {
+            url.searchParams.set('search', searchTerm);
+        } else {
+            url.searchParams.delete('search');
+        }
+        url.searchParams.delete('page');
+        window.location.href = url.toString();
+    });
+
+    // Download file function
+    function downloadFile(fileId, type) {
+        if (type === 'file') {
+            fetch('/api/files/download/' + fileId)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Download failed');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileId;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    showToast('Error downloading file: ' + error.message, 'error');
+                });
+        }
+    }
+
+    // Open link function
+    function openLink(linkId, name, url) {
+        // Validate URL
+        try {
+            new URL(url);
+        } catch (e) {
+            showToast('This link has an invalid URL format', 'error');
+            return;
+        }
+
+        // Increment download count
+        fetch('/api/links/' + linkId + '/download', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            }
+        }).catch(error => {
+            console.error('Error incrementing download count:', error);
+        });
+
+        // Open link in new tab
+        window.open(url, '_blank');
+    }
+
+    // Format bytes helper function
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+</script>

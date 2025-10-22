@@ -1,0 +1,135 @@
+o <div class="min-h-screen bg-white flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-4xl w-full flex flex-col items-center">
+        <!-- Hero Section -->
+        <div class="text-center mb-12 max-w-2xl">
+            <h1 class="text-4xl md:text-5xl font-light text-gray-900 mb-6">
+                Admin Login,{' '}
+                <span class="text-emerald-500 font-normal">the secure way.</span>
+            </h1>
+            <p class="text-lg text-gray-600 leading-relaxed">
+                Access the admin panel to manage your file server with full security and control.
+            </p>
+        </div>
+
+        <!-- Login Form -->
+        <form method="POST" action="/login" class="max-w-md w-full space-y-8">
+            <div class="bg-white rounded-lg shadow-lg p-8">
+                <% if (typeof error !== 'undefined' && error) { %>
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6" role="alert" aria-live="assertive">
+                    <div class="flex items-center">
+                        <svg class="w-5 h-5 text-red-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span class="text-red-700"><%= error %></span>
+                    </div>
+                </div>
+                <% } %>
+
+                <div class="space-y-6">
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                            Username
+                        </label>
+                        <input
+                            id="username"
+                            name="username"
+                            type="text"
+                            placeholder="Enter your username"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-gray-900 placeholder-gray-500 transition-all"
+                            required
+                            aria-required="true"
+                        />
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+                            Password
+                        </label>
+                        <input
+                            id="password"
+                            name="password"
+                            type="password"
+                            placeholder="Enter your password"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-gray-900 placeholder-gray-500 transition-all"
+                            required
+                            aria-required="true"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        id="login-btn"
+                        class="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 text-white font-medium rounded-lg transition-all flex items-center justify-center space-x-2"
+                        role="button"
+                        aria-label="Login to admin panel"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                        </svg>
+                        <span>Login</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Login form debugging and submission handling
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        const loginBtn = document.getElementById('login-btn');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+
+        console.log('=== LOGIN FORM DEBUG ===');
+        console.log('Form element:', form);
+        console.log('Form action:', form?.action);
+        console.log('Form method:', form?.method);
+        console.log('Username input name:', usernameInput?.name);
+        console.log('Password input name:', passwordInput?.name);
+
+        form.addEventListener('submit', function(e) {
+            console.log('=== FORM SUBMIT EVENT ===');
+            console.log('Form submission triggered');
+
+            // Get form data
+            const formData = new FormData(form);
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+
+            console.log('Form data being sent:');
+            console.log('- Username value:', username);
+            console.log('- Password value:', password ? '[HIDDEN]' : '[EMPTY]');
+            console.log('- FormData entries:', Array.from(formData.entries()));
+
+            // Validate inputs
+            if (!username || !password) {
+                console.error('VALIDATION ERROR: Missing username or password');
+                e.preventDefault();
+                return false;
+            }
+
+            console.log('✓ Form validation passed');
+            console.log('✓ Sending request to:', form.action);
+
+            // Show loading state
+            loginBtn.innerHTML = `
+                <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span>Logging in...</span>
+            `;
+            loginBtn.disabled = true;
+
+            console.log('✓ Loading state activated');
+        });
+
+        // Add input event listeners for real-time debugging
+        usernameInput.addEventListener('input', function() {
+            console.log('Username input changed:', this.value ? '[HAS_VALUE]' : '[EMPTY]');
+        });
+
+        passwordInput.addEventListener('input', function() {
+            console.log('Password input changed:', this.value ? '[HAS_VALUE]' : '[EMPTY]');
+        });
+
+        console.log('✓ Login form debugging initialized');
+    });
+</script>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title><%= typeof title !== 'undefined' ? title : 'File Server' %></title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0066cc',
+                        'primary-foreground': '#ffffff',
+                        background: '#ffffff',
+                        foreground: '#212529',
+                        muted: '#f8f9fa',
+                        'muted-foreground': '#6c757d',
+                        border: '#e9ecef',
+                        input: '#ffffff',
+                        ring: '#0066cc',
+                        destructive: '#dc3545',
+                        'destructive-foreground': '#ffffff'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Focus styles for accessibility */
+        *:focus-visible {
+            outline: 2px solid #0066cc;
+            outline-offset: 2px;
+        }
+
+        /* Smooth transitions */
+        * {
+            transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            overflow-x: hidden;
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+    <%- include('partials/navbar', { title: typeof title !== 'undefined' ? title : 'File Server' }) %>
+
+    <main class="pt-16">
+        <%- body %>
+    </main>
+
+    <!-- Toast notifications container -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script>
+        // Toast notification system
+        function showToast(message, type = 'info', duration = 5000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const bgColor = type === 'error' ? 'bg-red-50 border-red-200' :
+                           type === 'success' ? 'bg-green-50 border-green-200' :
+                           'bg-blue-50 border-blue-200';
+
+            const textColor = type === 'error' ? 'text-red-700' :
+                             type === 'success' ? 'text-green-700' :
+                             'text-blue-700';
+
+            toast.className = `max-w-md mx-auto mb-4 p-4 border rounded-lg ${bgColor}`;
+            toast.innerHTML = `
+                <div class="flex items-center">
+                    <span class="${textColor}">${message}</span>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, duration);
+        }
+
+        // Global error handler
+        window.onerror = function(message, source, lineno, colno, error) {
+            showToast('An error occurred: ' + message, 'error');
+            return false;
+        };
+
+        // Handle unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            showToast('An error occurred: ' + event.reason, 'error');
+        });
+    </script>
+</body>
+</html>
